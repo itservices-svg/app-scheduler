@@ -84,7 +84,7 @@ class MainActivity : Activity() {
         val row3 = LinearLayout(this)
         row3.orientation = LinearLayout.HORIZONTAL
         row3.addView(smallButton("Alarm stop") { AlarmSoundService.stop(this) })
-        row3.addView(smallButton("Unlock PIN") { askPin() })
+        row3.addView(smallButton("Unlock PIN/Password") { askPin() })
         root.addView(row3)
 
         val unlock = Switch(this)
@@ -138,7 +138,7 @@ class MainActivity : Activity() {
         val a11y = CloserService.instance != null
         val pinSet = PinVault.has(this)
         status.text = "Exact alarm: ${mark(exact)}   Overlay: ${mark(overlay)}   Accessibility: ${mark(a11y)}\n" +
-            "Unlock PIN: ${if (pinSet) "saved" else "nahi"}"
+            "Unlock PIN/Password: ${if (pinSet) "saved" else "nahi"}"
 
         list.removeAllViews()
         val items = Store.all(this)
@@ -207,23 +207,22 @@ class MainActivity : Activity() {
 
     private fun askPin() {
         val input = EditText(this)
-        input.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        input.hint = "Phone ka unlock PIN"
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        input.hint = "Phone ka PIN ya password"
         AlertDialog.Builder(this)
-            .setTitle("Unlock PIN")
+            .setTitle("Unlock PIN / Password")
             .setMessage(
-                "PIN sirf is phone par encrypt hokar rehta hai. Phone lock ho to schedule ke waqt " +
-                    "app ye PIN khud dalegi. Khali chhor kar Save dabao to PIN hat jayega."
+                "Letters aur numbers dono chalenge. Ye sirf is phone par encrypt hokar rehta hai. " +
+                    "Phone lock ho to schedule ke waqt app ye khud dalegi. " +
+                    "Khali chhor kar Save dabao to hat jayega."
             )
             .setView(input)
             .setPositiveButton("Save") { _, _ ->
-                val pin = input.text.toString().trim()
+                val pin = input.text.toString()
                 if (pin.isEmpty()) {
                     PinVault.clear(this)
-                } else if (pin.all { it.isDigit() }) {
-                    PinVault.save(this, pin)
                 } else {
-                    Toast.makeText(this, "PIN mein sirf digits hon", Toast.LENGTH_LONG).show()
+                    PinVault.save(this, pin)
                 }
                 refresh()
             }

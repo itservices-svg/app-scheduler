@@ -27,7 +27,7 @@ Is APK ki signing key fixed hai, to nayi version purani ke upar install ho jati 
 
 ### Lock screen aur PIN unlock
 
-- **Unlock PIN button:** apna phone ka PIN (sirf digits) yahan save karo. Ye PIN sirf isi phone par Android Keystore se encrypt hokar rehta hai, kahin upload nahi hota. Khali Save karne se PIN hat jata hai.
+- **Unlock PIN/Password button:** apna phone ka PIN ya password (letters + numbers dono chalte hain) yahan save karo. Number PIN ho to PIN pad ke digits dabte hain, password ho to password field mein text set hota hai. Ye PIN sirf isi phone par Android Keystore se encrypt hokar rehta hai, kahin upload nahi hota. Khali Save karne se PIN hat jata hai.
 - Schedule ke waqt phone lock ho to app screen on karti hai, Accessibility se swipe-up karke PIN pad ke digits dabati hai, phir target app kholti hai.
 - Ye sirf **PIN** ke liye hai. Fingerprint, face ya pattern automate nahi ho sakte. Pattern/fingerprint wale phone par "Phone lock ho to unlock prompt dikhao" switch ON rakho: screen on hogi aur tum khud unlock karoge.
 - Accessibility service ON honi zaroori hai. PIN pad dhoondhne ke liye ye OnePlus (OxygenOS) ka standard PIN screen assume karti hai. Kaam na kare to batao.

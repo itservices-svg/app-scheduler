@@ -79,7 +79,12 @@ class AlarmReceiver : BroadcastReceiver() {
 
         if (km.isKeyguardLocked && pin != null && svc != null) {
             // Phone lock hai aur PIN saved hai: PIN dal kar unlock karo, phir app kholo
-            svc.unlockWithPin(pin) {
+            svc.unlockWithPin(pin) { ok ->
+                if (!ok) {
+                    Toast.makeText(
+                        ctx, "Unlock screen ya password field nahi mili, khud unlock karo", Toast.LENGTH_LONG
+                    ).show()
+                }
                 startTarget(ctx, pkg)
                 // Agar unlock nahi ho saka to user ke liye system ka unlock prompt
                 if (km.isKeyguardLocked && Prefs.unlockPrompt(ctx)) showUnlockPrompt(ctx)

@@ -5,6 +5,8 @@ import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -14,7 +16,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 /**
  * 1) Force stop: App Info screen kholta hai, "Force stop" dabata hai, phir confirm dialog mein "OK".
  *    (Settings English mein honi chahiye.)
- * 2) PIN unlock: lock screen par swipe-up karke PIN pad ke digits dabata hai.
+ * 2) Unlock: lock screen par swipe-up karke ya to password field mein text set karta hai
+ *    (letters + numbers wala password) ya number PIN pad ke digits dabata hai.
  */
 class CloserService : AccessibilityService() {
 
@@ -102,17 +105,17 @@ class CloserService : AccessibilityService() {
         }
     }
 
-    // ------------------------- PIN unlock -------------------------
+    // ------------------------- Unlock (PIN ya password) -------------------------
 
     /**
-     * Lock screen ko swipe-up karke PIN pad kholta hai aur PIN ke digits dabata hai.
-     * Kaam khatam hone par (kamyab ho ya nakam) onDone chalta hai.
+     * Lock screen ko swipe-up karke unlock screen kholta hai aur secret (PIN/password) dalta hai.
+     * onDone(true) = secret dal diya gaya, onDone(false) = unlock screen ya field mila hi nahi.
      */
-    fun unlockWithPin(pin: String, onDone: () -> Unit) {
+    fun unlockWithPin(secret: String, onDone: (Boolean) -> Unit) {
         unlockRun++
         val myRun = unlockRun
         swipeUp()
-        handler.postDelayed({ typeDigit(pin, 0, 0, myRun, onDone) }, 900)
+        handler.postDelayed({ unlockStep(secret, 0, myRun, onDone) }, 900)
     }
 
     private fun swipeUp() {
@@ -129,23 +132,56 @@ class CloserService : AccessibilityService() {
         }
     }
 
-    private fun typeDigit(pin: String, idx: Int, attempt: Int, myRun: Int, onDone: () -> Unit) {
+    private fun unlockStep(secret: String, attempt: Int, myRun: Int, onDone: (Boolean) -> Unit) {
+        if (myRun != unlockRun) return
+
+        val digitsOnly = secret.isNotEmpty() && secret.all { it.isDigit() }
+
+        // 1) Number PIN pad (sirf digits wale secret ke liye)
+        if (digitsOnly && clickDigit(secret[0])) {
+            typeDigit(secret, 1, 0, myRun, onDone)
+            return
+        }
+
+        // 2) Password field (letters/numbers wala password, ya PIN ki entry field)
+        val field = findPasswordField()
+        if (field != null) {
+            val args = Bundle()
+            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, secret)
+            field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+                handler.postDelayed({
+                    submit(field)
+                    handler.postDelayed({ if (myRun == unlockRun) onDone(true) }, 1200)
+                }, 400)
+                return
+            }
+        }
+
+        if (attempt < 10) {
+            // Unlock screen abhi nazar nahi aayi, thori der baad dobara
+            if (attempt == 3 || attempt == 7) swipeUp()
+            handler.postDelayed({ unlockStep(secret, attempt + 1, myRun, onDone) }, 400)
+        } else {
+            onDone(false)
+        }
+    }
+
+    private fun typeDigit(pin: String, idx: Int, attempt: Int, myRun: Int, onDone: (Boolean) -> Unit) {
         if (myRun != unlockRun) return
         if (idx >= pin.length) {
             handler.postDelayed({
-                pressEnter()
-                handler.postDelayed({ if (myRun == unlockRun) onDone() }, 1200)
+                submit(null)
+                handler.postDelayed({ if (myRun == unlockRun) onDone(true) }, 1200)
             }, 300)
             return
         }
         if (clickDigit(pin[idx])) {
             handler.postDelayed({ typeDigit(pin, idx + 1, 0, myRun, onDone) }, 180)
         } else if (attempt < 8) {
-            // PIN pad abhi nazar nahi aaya, thori der baad dobara
-            if (attempt == 3) swipeUp()
             handler.postDelayed({ typeDigit(pin, idx, attempt + 1, myRun, onDone) }, 400)
         } else {
-            onDone() // PIN pad mila hi nahi
+            onDone(false) // PIN pad beech mein gum ho gaya
         }
     }
 
@@ -157,6 +193,46 @@ class CloserService : AccessibilityService() {
         }
         rootInActiveWindow?.let { out.add(it) }
         return out
+    }
+
+    private fun findPasswordField(): AccessibilityNodeInfo? {
+        val roots = allRoots()
+        for (root in roots) {
+            for (id in listOf("com.android.systemui:id/passwordEntry", "com.android.systemui:id/pinEntry")) {
+                val n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull()
+                if (n != null) return n
+            }
+        }
+        for (root in roots) {
+            val n = firstEditable(root, 0)
+            if (n != null) return n
+        }
+        return null
+    }
+
+    private fun firstEditable(n: AccessibilityNodeInfo?, depth: Int): AccessibilityNodeInfo? {
+        if (n == null || depth > 25) return null
+        if (n.isEditable && n.isPassword) return n
+        for (i in 0 until n.childCount) {
+            val r = firstEditable(n.getChild(i), depth + 1)
+            if (r != null) return r
+        }
+        return null
+    }
+
+    /** Enter dabana: pehle keyboard ka Enter action, phir "Enter" button. */
+    private fun submit(field: AccessibilityNodeInfo?) {
+        if (field != null && Build.VERSION.SDK_INT >= 30) {
+            if (field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) return
+        }
+        for (root in allRoots()) {
+            for (n in root.findAccessibilityNodeInfosByViewId("com.android.systemui:id/key_enter")) {
+                if (clickNode(n)) return
+            }
+            for (n in root.findAccessibilityNodeInfosByText("Enter")) {
+                if (clickNode(n)) return
+            }
+        }
     }
 
     private fun clickDigit(d: Char): Boolean {
@@ -172,17 +248,6 @@ class CloserService : AccessibilityService() {
             }
         }
         return false
-    }
-
-    private fun pressEnter() {
-        for (root in allRoots()) {
-            for (n in root.findAccessibilityNodeInfosByViewId("com.android.systemui:id/key_enter")) {
-                if (clickNode(n)) return
-            }
-            for (n in root.findAccessibilityNodeInfosByText("Enter")) {
-                if (clickNode(n)) return
-            }
-        }
     }
 
     private fun clickNode(n: AccessibilityNodeInfo?): Boolean {
