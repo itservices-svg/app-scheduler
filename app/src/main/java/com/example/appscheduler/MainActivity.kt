@@ -13,9 +13,11 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -82,6 +84,7 @@ class MainActivity : Activity() {
         val row3 = LinearLayout(this)
         row3.orientation = LinearLayout.HORIZONTAL
         row3.addView(smallButton("Alarm stop") { AlarmSoundService.stop(this) })
+        row3.addView(smallButton("Unlock PIN") { askPin() })
         root.addView(row3)
 
         val unlock = Switch(this)
@@ -133,7 +136,9 @@ class MainActivity : Activity() {
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
         val overlay = Settings.canDrawOverlays(this)
         val a11y = CloserService.instance != null
-        status.text = "Exact alarm: ${mark(exact)}   Overlay: ${mark(overlay)}   Accessibility: ${mark(a11y)}"
+        val pinSet = PinVault.has(this)
+        status.text = "Exact alarm: ${mark(exact)}   Overlay: ${mark(overlay)}   Accessibility: ${mark(a11y)}\n" +
+            "Unlock PIN: ${if (pinSet) "saved" else "nahi"}"
 
         list.removeAllViews()
         val items = Store.all(this)
@@ -198,6 +203,32 @@ class MainActivity : Activity() {
         })
         box.addView(actions)
         return box
+    }
+
+    private fun askPin() {
+        val input = EditText(this)
+        input.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        input.hint = "Phone ka unlock PIN"
+        AlertDialog.Builder(this)
+            .setTitle("Unlock PIN")
+            .setMessage(
+                "PIN sirf is phone par encrypt hokar rehta hai. Phone lock ho to schedule ke waqt " +
+                    "app ye PIN khud dalegi. Khali chhor kar Save dabao to PIN hat jayega."
+            )
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val pin = input.text.toString().trim()
+                if (pin.isEmpty()) {
+                    PinVault.clear(this)
+                } else if (pin.all { it.isDigit() }) {
+                    PinVault.save(this, pin)
+                } else {
+                    Toast.makeText(this, "PIN mein sirf digits hon", Toast.LENGTH_LONG).show()
+                }
+                refresh()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // ---- Naya schedule banane ka flow: app -> launch time -> close mode -> (close time) -> alarm ----

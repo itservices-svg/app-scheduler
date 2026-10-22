@@ -25,9 +25,13 @@ Is APK ki signing key fixed hai, to nayi version purani ke upar install ho jati 
 - **Soft close (recommended):** pehle Home par jata hai, phir system se app ke background processes khatam karwata hai. App Info screen ya dialog nahi dikhta. Agar app kisi foreground service ki wajah se chalti rehti hai to ye usse band nahi kar sakta.
 - **Force stop:** App Info screen kholkar "Force stop" dabata hai (Accessibility chahiye, Settings English mein honi chahiye). Zyada pakka hai magar screen kuch second dikhti hai.
 
-### Lock screen ke baare mein
+### Lock screen aur PIN unlock
 
-Android kisi app ko PIN/pattern/fingerprint khud nahi dalne deta, to phone **khud unlock nahi ho sakta**. App sirf screen on karke unlock prompt dikhati hai, user ko fingerprint/PIN dena parta hai. Phone khud unlocked rakhna ho to Android ki Smart Lock (trusted place/device) use karo, ya lock "Swipe" par rakho.
+- **Unlock PIN button:** apna phone ka PIN (sirf digits) yahan save karo. Ye PIN sirf isi phone par Android Keystore se encrypt hokar rehta hai, kahin upload nahi hota. Khali Save karne se PIN hat jata hai.
+- Schedule ke waqt phone lock ho to app screen on karti hai, Accessibility se swipe-up karke PIN pad ke digits dabati hai, phir target app kholti hai.
+- Ye sirf **PIN** ke liye hai. Fingerprint, face ya pattern automate nahi ho sakte. Pattern/fingerprint wale phone par "Phone lock ho to unlock prompt dikhao" switch ON rakho: screen on hogi aur tum khud unlock karoge.
+- Accessibility service ON honi zaroori hai. PIN pad dhoondhne ke liye ye OnePlus (OxygenOS) ka standard PIN screen assume karti hai. Kaam na kare to batao.
+- Phone ka PIN save karna security risk hai: koi tumhara phone khole aur app ke andar jaye to PIN badal/dekh sakta hai (app PIN dikhati nahi, magar isi phone par saved hai). Sirf apne personal phone par use karo.
 
 ## Mobile par setup (pehli baar)
 

@@ -19,8 +19,8 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarm = s?.alarm ?: (intent.getStringExtra(Scheduler.EXTRA_ALARM) ?: "")
 
         when (intent.action) {
-            Scheduler.ACTION_LAUNCH -> launch(ctx, pkg, alarm)
-            Scheduler.ACTION_CLOSE -> close(ctx, pkg, mode)
+            Scheduler.ACTION_LAUNCH -> launch(ctx.applicationContext, pkg, alarm)
+            Scheduler.ACTION_CLOSE -> close(ctx.applicationContext, pkg, mode)
         }
 
         // Agle din ke liye dobara schedule
@@ -39,7 +39,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     PowerManager.ON_AFTER_RELEASE,
                 "appscheduler:wake"
             )
-            wl.acquire(10_000)
+            wl.acquire(30_000)
         } catch (_: Exception) {
         }
     }
@@ -58,25 +58,40 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun showUnlockPrompt(ctx: Context) {
+        try {
+            ctx.startActivity(
+                Intent(ctx, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+        }
+    }
+
     private fun launch(ctx: Context, pkg: String, alarm: String) {
         wakeScreen(ctx)
 
-        // Alarm pehle, taake launch mein der ho to bhi bajne lage
+        // Alarm pehle, taake unlock mein der ho to bhi bajne lage
         if (alarm.isNotEmpty()) AlarmSoundService.start(ctx, alarm)
+
+        val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        val pin = PinVault.load(ctx)
+        val svc = CloserService.instance
+
+        if (km.isKeyguardLocked && pin != null && svc != null) {
+            // Phone lock hai aur PIN saved hai: PIN dal kar unlock karo, phir app kholo
+            svc.unlockWithPin(pin) {
+                startTarget(ctx, pkg)
+                // Agar unlock nahi ho saka to user ke liye system ka unlock prompt
+                if (km.isKeyguardLocked && Prefs.unlockPrompt(ctx)) showUnlockPrompt(ctx)
+            }
+            return
+        }
 
         // App khol do (phone lock ho to bhi wo lock screen ke peeche khul jati hai)
         startTarget(ctx, pkg)
 
         // Lock ho aur user ne option on rakha ho to unlock prompt dikhao
-        val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        if (Prefs.unlockPrompt(ctx) && km.isKeyguardLocked) {
-            try {
-                ctx.startActivity(
-                    Intent(ctx, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            } catch (_: Exception) {
-            }
-        }
+        if (Prefs.unlockPrompt(ctx) && km.isKeyguardLocked) showUnlockPrompt(ctx)
     }
 
     private fun close(ctx: Context, pkg: String, mode: Int) {
