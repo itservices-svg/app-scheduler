@@ -11,8 +11,19 @@ android {
         applicationId = "com.example.appscheduler"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
+    }
+
+    // Har build par wohi key use hoti hai, taake nayi APK purani ke upar install ho
+    // (aur permissions bani rahein). Ye sirf prototype ke liye hai, Play Store release key nahi.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

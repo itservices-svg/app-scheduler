@@ -1,40 +1,58 @@
 # App Scheduler (prototype)
 
-Kisi bhi app ko roz ek waqt par launch karna aur doosre waqt par close karna (Android).
+Kisi bhi app ko roz ek waqt par launch karna aur (optional) doosre waqt par close karna. Android.
 
-## APK kaise banegi (laptop/Android Studio ke baghair)
+## APK download
 
-1. github.com par naya repository banao (naam kuch bhi, e.g. `app-scheduler`).
-2. Is zip ke andar ki **saari files** (hidden `.github` folder samet) repo mein upload karo.
-   - Agar `.github` folder upload na ho: repo mein **Add file -> Create new file** dabao, naam mein
-     `.github/workflows/build.yml` likho aur `build.yml` ka content paste kar do.
-3. Repo ke **Actions** tab mein jao, "Build APK" run hone do (2-5 minute).
-4. Run khatam hone par neeche **Artifacts** mein `app-debug-apk` download karo, zip kholo, `app-debug.apk` mobile par install karo
-   ("Install unknown apps" allow karna padega).
+Har push par GitHub Actions APK banata hai. Mobile par ye page kholo aur sab se naya release ka `app-debug.apk` download karo:
 
-Agar build fail ho to Actions ka error log copy karke mujhe bhej do, main fix kar dunga.
+https://github.com/itservices-svg/app-scheduler/releases
 
-## Mobile par pehli baar setup
+Is APK ki signing key fixed hai, to nayi version purani ke upar install ho jati hai aur permissions bani rehti hain.
+(Sirf pehli baar jab key badli hai, purani app ek baar uninstall karni parti hai.)
 
-App kholo. Upar 4 buttons hain:
+## Features
+
+| Feature | Detail |
+|---|---|
+| Launch | Schedule ke waqt app khulti hai (phone lock ho to bhi lock screen ke peeche khul jati hai) |
+| Close (optional) | Close nahi / Soft close / Force stop, har schedule ke liye alag |
+| Alarm | App khulte hi alarm bajta hai: default beep ya phone ka koi bhi alarm sound. 30 second tak ya Stop dabane tak |
+| Lock screen | Screen on hoti hai aur system ka unlock prompt (fingerprint/PIN) aata hai. Unlock hote hi app samne aa jati hai |
+
+### Close modes
+
+- **Soft close (recommended):** pehle Home par jata hai, phir system se app ke background processes khatam karwata hai. App Info screen ya dialog nahi dikhta. Agar app kisi foreground service ki wajah se chalti rehti hai to ye usse band nahi kar sakta.
+- **Force stop:** App Info screen kholkar "Force stop" dabata hai (Accessibility chahiye, Settings English mein honi chahiye). Zyada pakka hai magar screen kuch second dikhti hai.
+
+### Lock screen ke baare mein
+
+Android kisi app ko PIN/pattern/fingerprint khud nahi dalne deta, to phone **khud unlock nahi ho sakta**. App sirf screen on karke unlock prompt dikhati hai, user ko fingerprint/PIN dena parta hai. Phone khud unlocked rakhna ho to Android ki Smart Lock (trusted place/device) use karo, ya lock "Swipe" par rakho.
+
+## Mobile par setup (pehli baar)
+
+App kholo. Upar buttons hain:
 
 | Button | Kya karna hai |
 |---|---|
 | Exact alarm | "Alarms & reminders" allow karo |
 | Overlay | "Display over other apps" allow karo (background se app kholne ke liye) |
-| Accessibility | App Scheduler service ON karo (app band karne ke liye). Android 13+ par pehle App info -> menu (⋮) -> **Allow restricted settings**, phir Accessibility ON |
-| Battery | App ko "Unrestricted" / no restrictions par rakho. Xiaomi/Oppo/Vivo par Autostart bhi ON karo |
+| Accessibility | App Scheduler service ON karo. Android 13+ par pehle App info -> menu (⋮) -> **Allow restricted settings** |
+| Battery | App ko "Unrestricted" par rakho. Autostart bhi ON karo (OnePlus: Settings -> Battery -> Battery optimization) |
+| Alarm stop | Bajta hua alarm band karta hai |
 
+Pehli baar notification permission bhi maangi jati hai, allow kar do (alarm ka Stop button wahi dikhta hai).
 Status line (`OK` / `NAHI`) bata degi kaun si permission baqi hai.
 
 ## Test
 
-"+ Naya schedule" -> app chuno -> launch time -> close time. Phir us row ka **Test** dabao:
-5 second baad app khulegi, 25 second baad band hogi. Pehle Test se hi check kar lo, phir asli waqt lagao.
+"+ Naya schedule" -> app -> launch time -> close mode -> (close time) -> alarm. Phir us row ka **Test** dabao:
+5 second baad app khulegi (alarm ke saath), 25 second baad band hogi (agar close on hai).
+
+Schedule badalna ho to Delete karke naya banao.
 
 ## Maloom limitations
 
-- Close karne ke liye phone ki Settings **English** mein honi chahiye (button text "Force stop" / "OK" dhoondha jata hai).
-- Close ke waqt App Info screen kuch second ke liye nazar aayegi, phir Home par wapas.
-- Kuch phones (Xiaomi, Oppo, Vivo, Samsung ke kuch models) battery/autostart ki wajah se alarm miss kar sakte hain.
-- Ye prototype hai: Play Store ke liye accessibility/exact alarm ki approval alag mushkil hai.
+- Force stop ke liye phone ki Settings **English** mein honi chahiye.
+- Kuch phones battery/autostart ki wajah se alarm miss kar sakte hain.
+- Prototype hai: Play Store ke liye accessibility/exact alarm ki approval alag mushkil hai.

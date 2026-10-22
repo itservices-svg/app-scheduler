@@ -13,18 +13,22 @@ object Scheduler {
     const val EXTRA_PKG = "pkg"
     const val EXTRA_ID = "id"
     const val EXTRA_REPEAT = "repeat"
+    const val EXTRA_MODE = "mode"
+    const val EXTRA_ALARM = "alarm"
 
     private const val TEST_LAUNCH_CODE = 900001
     private const val TEST_CLOSE_CODE = 900002
 
     private fun pending(
-        ctx: Context, code: Int, action: String, pkg: String, id: Int, repeat: Boolean
+        ctx: Context, code: Int, action: String, s: Schedule, repeat: Boolean
     ): PendingIntent {
         val i = Intent(ctx, AlarmReceiver::class.java)
             .setAction(action)
-            .putExtra(EXTRA_PKG, pkg)
-            .putExtra(EXTRA_ID, id)
+            .putExtra(EXTRA_PKG, s.pkg)
+            .putExtra(EXTRA_ID, s.id)
             .putExtra(EXTRA_REPEAT, repeat)
+            .putExtra(EXTRA_MODE, s.closeMode)
+            .putExtra(EXTRA_ALARM, s.alarm)
         return PendingIntent.getBroadcast(
             ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -53,31 +57,31 @@ object Scheduler {
 
     fun cancel(ctx: Context, s: Schedule) {
         val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        am.cancel(pending(ctx, s.id * 2, ACTION_LAUNCH, s.pkg, s.id, true))
-        am.cancel(pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s.pkg, s.id, true))
+        am.cancel(pending(ctx, s.id * 2, ACTION_LAUNCH, s, true))
+        am.cancel(pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s, true))
     }
 
     fun scheduleOne(ctx: Context, s: Schedule) {
         cancel(ctx, s)
         if (!s.enabled) return
-        setAt(
-            ctx, nextTrigger(s.startH, s.startM),
-            pending(ctx, s.id * 2, ACTION_LAUNCH, s.pkg, s.id, true)
-        )
-        setAt(
-            ctx, nextTrigger(s.endH, s.endM),
-            pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s.pkg, s.id, true)
-        )
+        setAt(ctx, nextTrigger(s.startH, s.startM), pending(ctx, s.id * 2, ACTION_LAUNCH, s, true))
+        // Close optional hai
+        if (s.closeMode != CLOSE_NONE) {
+            setAt(ctx, nextTrigger(s.endH, s.endM), pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s, true))
+        }
     }
 
     fun scheduleAll(ctx: Context) {
         Store.all(ctx).forEach { scheduleOne(ctx, it) }
     }
 
-    /** Test: 5 second baad launch, 25 second baad close (repeat nahi hota). */
-    fun scheduleTest(ctx: Context, pkg: String) {
+    /** Test: 5 second baad launch (+ alarm), 25 second baad close (agar close on hai). Repeat nahi hota. */
+    fun scheduleTest(ctx: Context, s: Schedule) {
+        val t = s.copy(id = -1)
         val now = System.currentTimeMillis()
-        setAt(ctx, now + 5_000, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, pkg, -1, false))
-        setAt(ctx, now + 25_000, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, pkg, -1, false))
+        setAt(ctx, now + 5_000, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, t, false))
+        if (s.closeMode != CLOSE_NONE) {
+            setAt(ctx, now + 25_000, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, t, false))
+        }
     }
 }

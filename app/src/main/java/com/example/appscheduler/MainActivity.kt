@@ -1,11 +1,14 @@
 package com.example.appscheduler
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +23,18 @@ import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
+
+    private class Draft(val label: String, val pkg: String) {
+        var sh = 12
+        var sm = 0
+        var eh = 12
+        var em = 5
+        var closeMode = CLOSE_SOFT
+        var alarm = ""
+    }
+
+    private var draft: Draft? = null
+    private val reqRingtone = 77
 
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
@@ -64,6 +79,18 @@ class MainActivity : Activity() {
         })
         root.addView(row2)
 
+        val row3 = LinearLayout(this)
+        row3.orientation = LinearLayout.HORIZONTAL
+        row3.addView(smallButton("Alarm stop") { AlarmSoundService.stop(this) })
+        root.addView(row3)
+
+        val unlock = Switch(this)
+        unlock.text = "Phone lock ho to unlock prompt dikhao"
+        unlock.isChecked = Prefs.unlockPrompt(this)
+        unlock.setOnCheckedChangeListener { _, on -> Prefs.setUnlockPrompt(this, on) }
+        unlock.setPadding(0, dp(8), 0, dp(4))
+        root.addView(unlock)
+
         val add = Button(this)
         add.text = "+ Naya schedule"
         add.setOnClickListener { pickApp() }
@@ -76,6 +103,13 @@ class MainActivity : Activity() {
         root.addView(scroll)
 
         setContentView(root)
+
+        // Android 13+: alarm notification dikhane ke liye
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
     }
 
     override fun onResume() {
@@ -124,8 +158,19 @@ class MainActivity : Activity() {
         title.textSize = 18f
         box.addView(title)
 
+        val endTime = "${two(s.endH)}:${two(s.endM)}"
+        val closeTxt = when (s.closeMode) {
+            CLOSE_NONE -> "Close: nahi"
+            CLOSE_SOFT -> "Close $endTime (soft)"
+            else -> "Close $endTime (force stop)"
+        }
+        val alarmTxt = when (s.alarm) {
+            "" -> "Alarm: nahi"
+            "default" -> "Alarm: default"
+            else -> "Alarm: custom sound"
+        }
         val time = TextView(this)
-        time.text = "Launch ${two(s.startH)}:${two(s.startM)}  ->  Close ${two(s.endH)}:${two(s.endM)}"
+        time.text = "Launch ${two(s.startH)}:${two(s.startM)}  ->  $closeTxt\n$alarmTxt"
         box.addView(time)
 
         val actions = LinearLayout(this)
@@ -142,8 +187,9 @@ class MainActivity : Activity() {
         actions.addView(sw)
 
         actions.addView(smallButton("Test") {
-            Scheduler.scheduleTest(this, s.pkg)
-            Toast.makeText(this, "5 sec mein launch, 25 sec mein close", Toast.LENGTH_LONG).show()
+            Scheduler.scheduleTest(this, s)
+            val msg = if (s.closeMode == CLOSE_NONE) "5 sec mein launch" else "5 sec mein launch, 25 sec mein close"
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         })
         actions.addView(smallButton("Delete") {
             Scheduler.cancel(this, s)
@@ -153,6 +199,8 @@ class MainActivity : Activity() {
         box.addView(actions)
         return box
     }
+
+    // ---- Naya schedule banane ka flow: app -> launch time -> close mode -> (close time) -> alarm ----
 
     private fun pickApp() {
         val pm = packageManager
@@ -167,23 +215,107 @@ class MainActivity : Activity() {
             .setTitle("App chuno")
             .setItems(apps.map { it.first }.toTypedArray()) { _, which ->
                 val (label, pkg) = apps[which]
-                pickTimes(label, pkg)
+                draft = Draft(label, pkg)
+                pickStart()
             }
             .show()
     }
 
-    private fun pickTimes(label: String, pkg: String) {
-        val startDlg = TimePickerDialog(this, { _, sh, sm ->
-            val endDlg = TimePickerDialog(this, { _, eh, em ->
-                val s = Schedule(Store.nextId(this), pkg, label, sh, sm, eh, em, true)
-                Store.add(this, s)
-                Scheduler.scheduleOne(this, s)
-                refresh()
-            }, sh, (sm + 5) % 60, true)
-            endDlg.setTitle("Close time (band karne ka waqt)")
-            endDlg.show()
-        }, 12, 0, true)
-        startDlg.setTitle("Launch time (kholne ka waqt)")
-        startDlg.show()
+    private fun pickStart() {
+        val d = draft ?: return
+        val dlg = TimePickerDialog(this, { _, h, m ->
+            d.sh = h
+            d.sm = m
+            pickCloseMode()
+        }, d.sh, d.sm, true)
+        dlg.setTitle("Launch time (kholne ka waqt)")
+        dlg.setOnCancelListener { draft = null }
+        dlg.show()
+    }
+
+    private fun pickCloseMode() {
+        val d = draft ?: return
+        val items = arrayOf(
+            "Close nahi karna",
+            "Soft close (Home + background kill) - recommended",
+            "Force stop (App Info screen dikhegi)"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("App ko band kaise karna hai?")
+            .setItems(items) { _, which ->
+                d.closeMode = which
+                if (which == CLOSE_NONE) pickAlarm() else pickEnd()
+            }
+            .setOnCancelListener { draft = null }
+            .show()
+    }
+
+    private fun pickEnd() {
+        val d = draft ?: return
+        val total = (d.sh * 60 + d.sm + 5) % (24 * 60)
+        d.eh = total / 60
+        d.em = total % 60
+        val dlg = TimePickerDialog(this, { _, h, m ->
+            d.eh = h
+            d.em = m
+            pickAlarm()
+        }, d.eh, d.em, true)
+        dlg.setTitle("Close time (band karne ka waqt)")
+        dlg.setOnCancelListener { draft = null }
+        dlg.show()
+    }
+
+    private fun pickAlarm() {
+        val d = draft ?: return
+        val items = arrayOf("Alarm nahi", "Default alarm (beep)", "Phone ka alarm sound chuno...")
+        AlertDialog.Builder(this)
+            .setTitle("App khulte hi alarm bajana hai?")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        d.alarm = ""
+                        saveDraft()
+                    }
+                    1 -> {
+                        d.alarm = "default"
+                        saveDraft()
+                    }
+                    else -> {
+                        val i = Intent(RingtoneManager.ACTION_RINGTONE_PICKER)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                            .putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Alarm sound chuno")
+                        startActivityForResult(i, reqRingtone)
+                    }
+                }
+            }
+            .setOnCancelListener { draft = null }
+            .show()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != reqRingtone) return
+        val d = draft ?: return
+        if (resultCode == RESULT_OK) {
+            val uri: Uri? = data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            d.alarm = uri?.toString() ?: "default"
+            saveDraft()
+        } else {
+            pickAlarm()
+        }
+    }
+
+    private fun saveDraft() {
+        val d = draft ?: return
+        draft = null
+        val s = Schedule(
+            Store.nextId(this), d.pkg, d.label, d.sh, d.sm, d.eh, d.em, true, d.closeMode, d.alarm
+        )
+        Store.add(this, s)
+        Scheduler.scheduleOne(this, s)
+        refresh()
     }
 }

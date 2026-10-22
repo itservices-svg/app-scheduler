@@ -4,6 +4,11 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** closeMode: 0 = close nahi karna, 1 = soft close (Home + background process kill), 2 = Force stop (App Info screen) */
+const val CLOSE_NONE = 0
+const val CLOSE_SOFT = 1
+const val CLOSE_FORCE = 2
+
 data class Schedule(
     val id: Int,
     val pkg: String,
@@ -12,7 +17,10 @@ data class Schedule(
     val startM: Int,
     val endH: Int,
     val endM: Int,
-    val enabled: Boolean
+    val enabled: Boolean,
+    val closeMode: Int = CLOSE_SOFT,
+    /** "" = alarm nahi, "default" = phone ka default alarm, warna ringtone ka Uri string */
+    val alarm: String = ""
 )
 
 object Store {
@@ -27,7 +35,9 @@ object Store {
                 Schedule(
                     o.getInt("id"), o.getString("pkg"), o.getString("label"),
                     o.getInt("sh"), o.getInt("sm"), o.getInt("eh"), o.getInt("em"),
-                    o.getBoolean("on")
+                    o.getBoolean("on"),
+                    o.optInt("cm", CLOSE_FORCE), // purane schedules pehle Force stop hi karte the
+                    o.optString("al", "")
                 )
             )
         }
@@ -46,6 +56,8 @@ object Store {
             o.put("eh", s.endH)
             o.put("em", s.endM)
             o.put("on", s.enabled)
+            o.put("cm", s.closeMode)
+            o.put("al", s.alarm)
             arr.put(o)
         }
         sp(c).edit().putString("list", arr.toString()).apply()
@@ -65,4 +77,15 @@ object Store {
         saveAll(c, all(c).map { if (it.id == s.id) s else it })
 
     fun remove(c: Context, id: Int) = saveAll(c, all(c).filter { it.id != id })
+}
+
+object Prefs {
+    private fun sp(c: Context) = c.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    /** Phone lock ho to launch ke waqt screen on karke unlock prompt dikhana */
+    fun unlockPrompt(c: Context): Boolean = sp(c).getBoolean("unlockPrompt", true)
+
+    fun setUnlockPrompt(c: Context, on: Boolean) {
+        sp(c).edit().putBoolean("unlockPrompt", on).apply()
+    }
 }
