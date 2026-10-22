@@ -196,6 +196,10 @@ class MainActivity : Activity() {
             val msg = if (s.closeMode == CLOSE_NONE) "5 sec mein launch" else "5 sec mein launch, 25 sec mein close"
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         })
+        actions.addView(smallButton("Lock test") {
+            Scheduler.scheduleTest(this, s, 20)
+            Toast.makeText(this, "20 sec mein launch. Ab phone lock kar do (power button)", Toast.LENGTH_LONG).show()
+        })
         actions.addView(smallButton("Delete") {
             Scheduler.cancel(this, s)
             Store.remove(this, s.id)

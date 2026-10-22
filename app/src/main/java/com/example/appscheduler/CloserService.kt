@@ -114,8 +114,8 @@ class CloserService : AccessibilityService() {
     fun unlockWithPin(secret: String, onDone: (Boolean) -> Unit) {
         unlockRun++
         val myRun = unlockRun
-        swipeUp()
-        handler.postDelayed({ unlockStep(secret, 0, myRun, onDone) }, 900)
+        // Unlock screen WakeActivity kholti hai, swipe sirf backup hai (neeche attempt 4 aur 9 par)
+        handler.postDelayed({ unlockStep(secret, 0, myRun, onDone) }, 1200)
     }
 
     private fun swipeUp() {
@@ -158,9 +158,9 @@ class CloserService : AccessibilityService() {
             }
         }
 
-        if (attempt < 10) {
+        if (attempt < 14) {
             // Unlock screen abhi nazar nahi aayi, thori der baad dobara
-            if (attempt == 3 || attempt == 7) swipeUp()
+            if (attempt == 4 || attempt == 9) swipeUp()
             handler.postDelayed({ unlockStep(secret, attempt + 1, myRun, onDone) }, 400)
         } else {
             onDone(false)

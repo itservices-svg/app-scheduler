@@ -76,12 +76,12 @@ object Scheduler {
     }
 
     /** Test: 5 second baad launch (+ alarm), 25 second baad close (agar close on hai). Repeat nahi hota. */
-    fun scheduleTest(ctx: Context, s: Schedule) {
+    fun scheduleTest(ctx: Context, s: Schedule, launchSec: Int = 5) {
         val t = s.copy(id = -1)
         val now = System.currentTimeMillis()
-        setAt(ctx, now + 5_000, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, t, false))
+        setAt(ctx, now + launchSec * 1000L, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, t, false))
         if (s.closeMode != CLOSE_NONE) {
-            setAt(ctx, now + 25_000, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, t, false))
+            setAt(ctx, now + (launchSec + 20) * 1000L, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, t, false))
         }
     }
 }

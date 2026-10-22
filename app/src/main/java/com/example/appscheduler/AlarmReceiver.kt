@@ -77,8 +77,15 @@ class AlarmReceiver : BroadcastReceiver() {
         val pin = PinVault.load(ctx)
         val svc = CloserService.instance
 
+        if (km.isKeyguardLocked && pin == null) {
+            Toast.makeText(ctx, "Unlock PIN/Password save nahi hai (app mein button dabao)", Toast.LENGTH_LONG).show()
+        } else if (km.isKeyguardLocked && svc == null) {
+            Toast.makeText(ctx, "Accessibility service band hai, auto-unlock nahi ho sakta", Toast.LENGTH_LONG).show()
+        }
+
         if (km.isKeyguardLocked && pin != null && svc != null) {
-            // Phone lock hai aur PIN saved hai: PIN dal kar unlock karo, phir app kholo
+            // Pehle system ka unlock screen (password/PIN box) kholo, phir service usme secret daale
+            showUnlockPrompt(ctx)
             svc.unlockWithPin(pin) { ok ->
                 if (!ok) {
                     Toast.makeText(

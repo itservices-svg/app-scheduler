@@ -55,6 +55,15 @@ Status line (`OK` / `NAHI`) bata degi kaun si permission baqi hai.
 
 Schedule badalna ho to Delete karke naya banao.
 
+## Lock screen unlock test
+
+1. App update ke baad **Accessibility ko ek baar OFF karke dobara ON karo** (nayi permission tab hi lagti hai).
+2. **Unlock PIN/Password** button se apna password save karo (status mein "saved" aana chahiye).
+3. Schedule ke row par **Lock test** dabao, phir foran power button se phone lock kar do.
+4. 20 second baad screen on hogi, unlock screen aayegi, password khud dalega aur app khulegi.
+
+Kaam na kare to screen par jo toast likha aaye wo mujhe bata do.
+
 ## Maloom limitations
 
 - Force stop ke liye phone ki Settings **English** mein honi chahiye.
