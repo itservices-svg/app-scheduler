@@ -15,12 +15,13 @@ object Scheduler {
     const val EXTRA_REPEAT = "repeat"
     const val EXTRA_MODE = "mode"
     const val EXTRA_ALARM = "alarm"
+    const val EXTRA_AT = "at"
 
     private const val TEST_LAUNCH_CODE = 900001
     private const val TEST_CLOSE_CODE = 900002
 
     private fun pending(
-        ctx: Context, code: Int, action: String, s: Schedule, repeat: Boolean
+        ctx: Context, code: Int, action: String, s: Schedule, repeat: Boolean, at: Long = 0L
     ): PendingIntent {
         val i = Intent(ctx, AlarmReceiver::class.java)
             .setAction(action)
@@ -29,6 +30,7 @@ object Scheduler {
             .putExtra(EXTRA_REPEAT, repeat)
             .putExtra(EXTRA_MODE, s.closeMode)
             .putExtra(EXTRA_ALARM, s.alarm)
+            .putExtra(EXTRA_AT, at)
         return PendingIntent.getBroadcast(
             ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -64,10 +66,15 @@ object Scheduler {
     fun scheduleOne(ctx: Context, s: Schedule) {
         cancel(ctx, s)
         if (!s.enabled) return
-        setAt(ctx, nextTrigger(s.startH, s.startM), pending(ctx, s.id * 2, ACTION_LAUNCH, s, true))
+        val startAt = nextTrigger(s.startH, s.startM)
+        setAt(ctx, startAt, pending(ctx, s.id * 2, ACTION_LAUNCH, s, true, startAt))
         // Close optional hai
         if (s.closeMode != CLOSE_NONE) {
-            setAt(ctx, nextTrigger(s.endH, s.endM), pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s, true))
+            val endAt = nextTrigger(s.endH, s.endM)
+            setAt(ctx, endAt, pending(ctx, s.id * 2 + 1, ACTION_CLOSE, s, true, endAt))
+            RunLog.add(ctx, "SET ${s.label}: launch ${RunLog.hms(startAt)}, close ${RunLog.hms(endAt)}")
+        } else {
+            RunLog.add(ctx, "SET ${s.label}: launch ${RunLog.hms(startAt)}, close nahi")
         }
     }
 
@@ -75,13 +82,18 @@ object Scheduler {
         Store.all(ctx).forEach { scheduleOne(ctx, it) }
     }
 
-    /** Test: 5 second baad launch (+ alarm), 25 second baad close (agar close on hai). Repeat nahi hota. */
+    /** Test: launchSec baad launch (+ alarm), uske 20 second baad close (agar close on hai). Repeat nahi hota. */
     fun scheduleTest(ctx: Context, s: Schedule, launchSec: Int = 5) {
         val t = s.copy(id = -1)
         val now = System.currentTimeMillis()
-        setAt(ctx, now + launchSec * 1000L, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, t, false))
+        val launchAt = now + launchSec * 1000L
+        setAt(ctx, launchAt, pending(ctx, TEST_LAUNCH_CODE, ACTION_LAUNCH, t, false, launchAt))
         if (s.closeMode != CLOSE_NONE) {
-            setAt(ctx, now + (launchSec + 20) * 1000L, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, t, false))
+            val closeAt = now + (launchSec + 20) * 1000L
+            setAt(ctx, closeAt, pending(ctx, TEST_CLOSE_CODE, ACTION_CLOSE, t, false, closeAt))
+            RunLog.add(ctx, "TEST set: launch ${RunLog.hms(launchAt)}, close ${RunLog.hms(closeAt)}")
+        } else {
+            RunLog.add(ctx, "TEST set: launch ${RunLog.hms(launchAt)}, close nahi")
         }
     }
 }

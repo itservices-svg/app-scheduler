@@ -21,6 +21,8 @@ object RunLog {
         }
     }
 
+    fun hms(ms: Long): String = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(ms))
+
     fun text(ctx: Context): String {
         val s = sp(ctx).getString(KEY, "") ?: ""
         return if (s.isBlank()) "Abhi koi log nahi." else s

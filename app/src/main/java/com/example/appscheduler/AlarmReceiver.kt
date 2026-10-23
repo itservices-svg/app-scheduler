@@ -17,6 +17,14 @@ class AlarmReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra(Scheduler.EXTRA_ID, -1)
         val repeat = intent.getBooleanExtra(Scheduler.EXTRA_REPEAT, false)
 
+        // Diagnostic: alarm kab aana tha aur kab aaya
+        val at = intent.getLongExtra(Scheduler.EXTRA_AT, 0L)
+        if (at > 0) {
+            val now = System.currentTimeMillis()
+            val kind = if (intent.action == Scheduler.ACTION_LAUNCH) "launch" else "close"
+            RunLog.add(ctx, "ALARM $kind: due ${RunLog.hms(at)}, aaya ${RunLog.hms(now)} (${(now - at) / 1000}s late)")
+        }
+
         // Asli schedule se taaza settings, warna test ke liye intent ke extras
         val s = if (id > 0) Store.get(ctx, id) else null
         val mode = s?.closeMode ?: intent.getIntExtra(Scheduler.EXTRA_MODE, CLOSE_SOFT)
