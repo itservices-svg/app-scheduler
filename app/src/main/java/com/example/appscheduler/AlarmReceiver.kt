@@ -31,7 +31,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarm = s?.alarm ?: (intent.getStringExtra(Scheduler.EXTRA_ALARM) ?: "")
 
         when (intent.action) {
-            Scheduler.ACTION_LAUNCH -> launch(ctx.applicationContext, pkg, alarm, mode, holdMsFor(s, mode))
+            Scheduler.ACTION_LAUNCH -> launch(ctx.applicationContext, pkg, alarm, mode, holdMsFor(ctx, s, mode))
             Scheduler.ACTION_CLOSE -> close(ctx.applicationContext, pkg, mode)
         }
 
@@ -41,13 +41,15 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    /** Screen kitni der on rakhni hai (safety limit): launch se close time tak + 2 minute. */
-    private fun holdMsFor(s: Schedule?, mode: Int): Long {
-        if (mode == CLOSE_NONE) return 60_000L
-        if (s == null) return 90_000L // test
+    /** Screen kitni der on rakhni hai (safety limit): launch se close time tak + keep-awake + buffer. */
+    private fun holdMsFor(ctx: Context, s: Schedule?, mode: Int): Long {
+        if (Prefs.neverLock(ctx)) return 8L * 60 * 60 * 1000
+        val keep = Prefs.keepAwakeSec(ctx) * 1000L
+        if (mode == CLOSE_NONE) return keep + 120_000L
+        if (s == null) return keep + 150_000L // test
         var d = ((s.endH * 60 + s.endM) - (s.startH * 60 + s.startM) + 1440) % 1440
         if (d == 0) d = 1440
-        return d * 60_000L + 120_000L
+        return d * 60_000L + keep + 180_000L
     }
 
     private fun startTarget(ctx: Context, pkg: String) {
@@ -60,6 +62,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             ctx.startActivity(i)
+            Prefs.setOpenedAt(ctx, System.currentTimeMillis())
             RunLog.add(ctx, "App kholi: $pkg")
         } catch (e: Exception) {
             Toast.makeText(ctx, "Launch fail: ${e.message}", Toast.LENGTH_LONG).show()
@@ -76,6 +79,11 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun lockPhone(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        return CloserService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) ?: false
+    }
+
     private fun launch(ctx: Context, pkg: String, alarm: String, mode: Int, holdMs: Long) {
         val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
         val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
@@ -89,7 +97,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 "passwordSaved=${pin != null} accessibility=${svc != null}"
         )
 
-        // Screen on karo aur close tak on rakho
+        // Baad mein dobara lock karne ke liye yaad rakho ke phone pehle band/locked tha
+        Prefs.setRelockPending(ctx, wasOff)
+
+        // Screen on karo aur on rakho
         ScreenKeeper.hold(ctx, holdMs)
 
         // Alarm pehle, taake unlock mein der ho to bhi bajne lage
@@ -107,7 +118,7 @@ class AlarmReceiver : BroadcastReceiver() {
             svc.unlockWithPin(pin) { ok ->
                 RunLog.add(
                     ctx,
-                    if (ok) "UNLOCK password dala gaya (ab locked=${km.isKeyguardLocked})"
+                    if (ok) "UNLOCK password dala gaya"
                     else "UNLOCK FAIL: password field ya PIN pad nahi mila"
                 )
                 if (!ok) {
@@ -118,7 +129,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 startTarget(ctx, pkg)
                 // Agar unlock nahi ho saka to user ke liye system ka unlock prompt
                 if (km.isKeyguardLocked && Prefs.unlockPrompt(ctx)) showUnlockPrompt(ctx)
-                afterOpen(ctx, km, mode, wasOff)
+                afterOpen(ctx, mode)
             }
             return
         }
@@ -128,36 +139,19 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Lock ho aur user ne option on rakha ho to unlock prompt dikhao
         if (Prefs.unlockPrompt(ctx) && km.isKeyguardLocked) showUnlockPrompt(ctx)
-        afterOpen(ctx, km, mode, wasOff)
+        afterOpen(ctx, mode)
     }
 
-    /**
-     * Close wale schedule: screen close tak on rehti hai (close par band hoti hai).
-     * Close nahi wale schedule: app khulne ke 5 second baad screen off (sirf agar phone pehle
-     * band/locked tha, taake tumhare istemal ke beech phone lock na ho).
-     */
-    private fun afterOpen(ctx: Context, km: KeyguardManager, mode: Int, wasOff: Boolean) {
-        if (mode != CLOSE_NONE) return
-        Handler(Looper.getMainLooper()).postDelayed({
-            val stillLocked = km.isKeyguardLocked
-            ScreenKeeper.release()
-            if (wasOff && !stillLocked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                CloserService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
-                RunLog.add(ctx, "5 sec baad screen off kar di")
-            } else {
-                RunLog.add(ctx, "5 sec baad screen on rakhne ka lock hata diya")
-            }
-        }, 5000)
+    /** Close nahi wale schedule: app khulte hi kaam khatam, ab sirf keep-awake ka intezar. */
+    private fun afterOpen(ctx: Context, mode: Int) {
+        if (mode == CLOSE_NONE) endHold(ctx)
     }
 
     private fun close(ctx: Context, pkg: String, mode: Int) {
         RunLog.add(ctx, "CLOSE $pkg | mode=$mode")
         when (mode) {
             CLOSE_NONE -> {}
-            CLOSE_SOFT -> {
-                val pending = goAsync()
-                Closer.soft(ctx, pkg) { pending.finish() }
-            }
+            CLOSE_SOFT -> Closer.soft(ctx, pkg) { endHoldLater(ctx, 1500) }
             else -> {
                 val svc = CloserService.instance
                 if (svc == null) {
@@ -165,12 +159,43 @@ class AlarmReceiver : BroadcastReceiver() {
                         ctx, "Accessibility service band hai, Force stop nahi ho sakta", Toast.LENGTH_LONG
                     ).show()
                     RunLog.add(ctx, "Force stop FAIL: accessibility band")
+                    endHoldLater(ctx, 2000)
                 } else {
                     svc.forceStop(pkg)
+                    endHoldLater(ctx, 9000)
                 }
             }
         }
-        // Ab screen ko apne time par off hone do
-        if (mode != CLOSE_NONE) ScreenKeeper.releaseSoon(6000)
+    }
+
+    private fun endHoldLater(ctx: Context, delayMs: Long) {
+        Handler(Looper.getMainLooper()).postDelayed({ endHold(ctx) }, delayMs)
+    }
+
+    /**
+     * Kaam khatam: phone ko app khulne ke keep-awake seconds tak lock/screen off nahi hone dena.
+     * "Kabhi lock na ho" on ho to screen on hi rehti hai (app mein "Screen on band" dabao ya power button).
+     * Warna us waqt ke baad wake lock hata diya jata hai aur (agar setting on ho aur phone pehle
+     * locked tha) phone khud lock kar diya jata hai.
+     */
+    private fun endHold(ctx: Context) {
+        val pending = Prefs.relockPending(ctx)
+        if (Prefs.neverLock(ctx)) {
+            Prefs.setRelockPending(ctx, false)
+            RunLog.add(ctx, "Kabhi lock na ho: screen on rakhi hai (band karne ke liye app mein 'Screen on band')")
+            return
+        }
+        val remaining = (Prefs.openedAt(ctx) + Prefs.keepAwakeSec(ctx) * 1000L - System.currentTimeMillis())
+            .coerceAtLeast(0L)
+        if (remaining > 0) RunLog.add(ctx, "Phone ${remaining / 1000}s aur lock nahi hoga")
+        Handler(Looper.getMainLooper()).postDelayed({
+            ScreenKeeper.release()
+            Prefs.setRelockPending(ctx, false)
+            if (pending && Prefs.relock(ctx)) {
+                RunLog.add(ctx, "Phone dobara lock kiya: ${lockPhone()}")
+            } else {
+                RunLog.add(ctx, "Screen on rakhne ka lock hata diya (screen apne timeout par off hogi)")
+            }
+        }, remaining)
     }
 }

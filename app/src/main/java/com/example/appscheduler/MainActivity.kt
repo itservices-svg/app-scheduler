@@ -100,12 +100,22 @@ class MainActivity : Activity() {
 
         val row4 = LinearLayout(this)
         row4.orientation = LinearLayout.HORIZONTAL
+        row4.addView(smallButton("Settings") { showSettings() })
         row4.addView(smallButton("Log dekho") { showLog() })
         row4.addView(smallButton("Log saaf") {
             RunLog.clear(this)
             Toast.makeText(this, "Log saaf ho gaya", Toast.LENGTH_SHORT).show()
         })
         root.addView(row4)
+
+        val row5 = LinearLayout(this)
+        row5.orientation = LinearLayout.HORIZONTAL
+        row5.addView(smallButton("Screen on band") {
+            ScreenKeeper.release()
+            Prefs.setRelockPending(this, false)
+            Toast.makeText(this, "Screen on rakhna band, ab phone apne timeout par lock hoga", Toast.LENGTH_LONG).show()
+        })
+        root.addView(row5)
 
         val unlock = Switch(this)
         unlock.text = "Phone lock ho to unlock prompt dikhao"
@@ -228,6 +238,56 @@ class MainActivity : Activity() {
         })
         box.addView(actions)
         return box
+    }
+
+    private fun showSettings() {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(8), dp(20), dp(8))
+
+        fun field(label: String, value: Int): EditText {
+            val t = TextView(this)
+            t.text = label
+            t.setPadding(0, dp(12), 0, 0)
+            box.addView(t)
+            val e = EditText(this)
+            e.inputType = InputType.TYPE_CLASS_NUMBER
+            e.setText(value.toString())
+            box.addView(e)
+            return e
+        }
+
+        val eKeep = field("Unlock ke baad phone kitne second lock/screen off na ho", Prefs.keepAwakeSec(this))
+
+        val swNever = Switch(this)
+        swNever.text = "Kabhi lock na ho (screen on rahe jab tak \"Screen on band\" na dabaun ya power button na dabaun)"
+        swNever.isChecked = Prefs.neverLock(this)
+        swNever.setPadding(0, dp(16), 0, dp(8))
+        box.addView(swNever)
+
+        val sw = Switch(this)
+        sw.text = "Us waqt ke baad phone khud lock kar do (agar schedule ke waqt locked tha)"
+        sw.isChecked = Prefs.relock(this)
+        sw.setPadding(0, dp(8), 0, dp(8))
+        box.addView(sw)
+
+        val sv = ScrollView(this)
+        sv.addView(box)
+
+        AlertDialog.Builder(this)
+            .setTitle("Settings")
+            .setView(sv)
+            .setPositiveButton("Save") { _, _ ->
+                Prefs.saveAll(
+                    this,
+                    eKeep.text.toString().toIntOrNull()?.coerceIn(0, 3600) ?: 60,
+                    swNever.isChecked,
+                    sw.isChecked
+                )
+                Toast.makeText(this, "Settings save ho gayin", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showLog() {

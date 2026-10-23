@@ -66,9 +66,17 @@ Kaam na kare to screen par jo toast likha aaye wo mujhe bata do.
 
 ## Screen on rakhna aur Log
 
-- Launch ke baad screen **close time tak on rehti hai** (phone beech mein lock nahi hota). Close hone ke 6 second baad screen apne normal timeout par jati hai.
-- **Close nahi** wale schedule mein app khulne ke **5 second baad screen off** ho jati hai, magar sirf tab jab phone pehle band/locked tha. Agar tum phone use kar rahe the to screen off nahi hoti.
+- Launch ke baad screen **close time tak on rehti hai** (phone beech mein lock nahi hota).
+- Close ho jaye ya na ho, app khulne ke baad phone kam az kam **Settings mein set kiye hue second** (default 60) lock nahi hota. Phir wake lock hat jata hai aur (agar Settings mein on ho aur phone pehle locked tha) phone khud lock ho jata hai.
 - **Log dekho** button har run ka hisaab dikhata hai: phone locked tha ya nahi, password saved hai ya nahi, Accessibility chal rahi thi ya nahi, unlock hua ya nahi. Koi run kaam na kare to wahi log bhej do.
+
+## Settings button
+
+| Option | Default | Matlab |
+|---|---|---|
+| Unlock ke baad kitne second lock na ho | 60 sec | App khulne ke baad phone itni der tak lock/screen off nahi hota (close pehle ho jaye tab bhi) |
+| Kabhi lock na ho | OFF | Screen on hi rehti hai jab tak tum app mein "Screen on band" na dabao ya power button na dabao (battery zyada lagti hai) |
+| Us waqt ke baad phone khud lock kar do | ON | Agar phone schedule ke waqt locked tha to upar wala time khatam hote hi phir lock kar deti hai |
 
 ## Maloom limitations
 

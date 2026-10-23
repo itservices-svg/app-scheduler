@@ -88,4 +88,34 @@ object Prefs {
     fun setUnlockPrompt(c: Context, on: Boolean) {
         sp(c).edit().putBoolean("unlockPrompt", on).apply()
     }
+
+    /** Unlock (app khulne) ke baad phone itne second tak lock/screen off na ho */
+    fun keepAwakeSec(c: Context): Int = sp(c).getInt("keepAwake", 60)
+
+    /** Phone bilkul lock na ho (screen on rahe jab tak user band na kare) */
+    fun neverLock(c: Context): Boolean = sp(c).getBoolean("neverLock", false)
+
+    /** Us time ke baad phone khud lock karna (agar schedule ke waqt locked tha) */
+    fun relock(c: Context): Boolean = sp(c).getBoolean("relock", true)
+
+    fun saveAll(c: Context, keepAwake: Int, neverLock: Boolean, relock: Boolean) {
+        sp(c).edit()
+            .putInt("keepAwake", keepAwake)
+            .putBoolean("neverLock", neverLock)
+            .putBoolean("relock", relock)
+            .apply()
+    }
+
+    // ---- Andar ki halat (settings nahi) ----
+    fun openedAt(c: Context): Long = sp(c).getLong("openedAt", 0L)
+
+    fun setOpenedAt(c: Context, t: Long) {
+        sp(c).edit().putLong("openedAt", t).apply()
+    }
+
+    fun relockPending(c: Context): Boolean = sp(c).getBoolean("relockPending", false)
+
+    fun setRelockPending(c: Context, on: Boolean) {
+        sp(c).edit().putBoolean("relockPending", on).apply()
+    }
 }

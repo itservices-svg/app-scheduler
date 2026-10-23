@@ -158,9 +158,9 @@ class CloserService : AccessibilityService() {
             }
         }
 
-        if (attempt < 14) {
-            // Unlock screen abhi nazar nahi aayi, thori der baad dobara
-            if (attempt == 4 || attempt == 9) swipeUp()
+        if (attempt < 30) {
+            // Unlock screen abhi nazar nahi aayi, thori der baad dobara (swipe backup)
+            if (attempt == 1 || (attempt > 0 && attempt % 4 == 0)) swipeUp()
             handler.postDelayed({ unlockStep(secret, attempt + 1, myRun, onDone) }, 400)
         } else {
             onDone(false)
