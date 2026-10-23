@@ -87,6 +87,15 @@ class MainActivity : Activity() {
         row3.addView(smallButton("Unlock PIN/Password") { askPin() })
         root.addView(row3)
 
+        val row4 = LinearLayout(this)
+        row4.orientation = LinearLayout.HORIZONTAL
+        row4.addView(smallButton("Log dekho") { showLog() })
+        row4.addView(smallButton("Log saaf") {
+            RunLog.clear(this)
+            Toast.makeText(this, "Log saaf ho gaya", Toast.LENGTH_SHORT).show()
+        })
+        root.addView(row4)
+
         val unlock = Switch(this)
         unlock.text = "Phone lock ho to unlock prompt dikhao"
         unlock.isChecked = Prefs.unlockPrompt(this)
@@ -207,6 +216,21 @@ class MainActivity : Activity() {
         })
         box.addView(actions)
         return box
+    }
+
+    private fun showLog() {
+        val tv = TextView(this)
+        tv.text = RunLog.text(this)
+        tv.textSize = 12f
+        tv.setPadding(dp(16), dp(12), dp(16), dp(12))
+        tv.setTextIsSelectable(true)
+        val sv = ScrollView(this)
+        sv.addView(tv)
+        AlertDialog.Builder(this)
+            .setTitle("Pichle runs ka log")
+            .setView(sv)
+            .setPositiveButton("Theek hai", null)
+            .show()
     }
 
     private fun askPin() {

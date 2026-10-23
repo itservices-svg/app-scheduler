@@ -64,6 +64,12 @@ Schedule badalna ho to Delete karke naya banao.
 
 Kaam na kare to screen par jo toast likha aaye wo mujhe bata do.
 
+## Screen on rakhna aur Log
+
+- Launch ke baad screen **close time tak on rehti hai** (phone beech mein lock nahi hota). Close hone ke 6 second baad screen apne normal timeout par jati hai.
+- **Close nahi** wale schedule mein app khulne ke **5 second baad screen off** ho jati hai, magar sirf tab jab phone pehle band/locked tha. Agar tum phone use kar rahe the to screen off nahi hoti.
+- **Log dekho** button har run ka hisaab dikhata hai: phone locked tha ya nahi, password saved hai ya nahi, Accessibility chal rahi thi ya nahi, unlock hua ya nahi. Koi run kaam na kare to wahi log bhej do.
+
 ## Maloom limitations
 
 - Force stop ke liye phone ki Settings **English** mein honi chahiye.
