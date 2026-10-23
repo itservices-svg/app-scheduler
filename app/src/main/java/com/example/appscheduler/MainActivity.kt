@@ -77,7 +77,18 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
         row2.addView(smallButton("Battery") {
-            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            try {
+                if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+                    )
+                } else {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
         })
         root.addView(row2)
 
@@ -147,7 +158,8 @@ class MainActivity : Activity() {
         val a11y = CloserService.instance != null
         val pinSet = PinVault.has(this)
         status.text = "Exact alarm: ${mark(exact)}   Overlay: ${mark(overlay)}   Accessibility: ${mark(a11y)}\n" +
-            "Unlock PIN/Password: ${if (pinSet) "saved" else "nahi"}"
+            "Battery: ${mark((getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(packageName))}" +
+            "   Unlock PIN/Password: ${if (pinSet) "saved" else "nahi"}"
 
         list.removeAllViews()
         val items = Store.all(this)

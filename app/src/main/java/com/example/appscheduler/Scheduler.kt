@@ -51,7 +51,13 @@ object Scheduler {
         val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
         if (canExact) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pi)
+            // setAlarmClock sab se pakka alarm hai: Doze aur OEM battery restrictions mein bhi
+            // phone ko jagata hai (status bar mein alarm icon dikhta hai)
+            val show = PendingIntent.getActivity(
+                ctx, 0, Intent(ctx, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            am.setAlarmClock(AlarmManager.AlarmClockInfo(atMillis, show), pi)
         } else {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pi)
         }
