@@ -2,6 +2,8 @@ package com.example.appscheduler
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Path
 import android.net.Uri
@@ -12,12 +14,13 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.EditorInfo
 
 /**
  * 1) Force stop: App Info screen kholta hai, "Force stop" dabata hai, phir confirm dialog mein "OK".
  *    (Settings English mein honi chahiye.)
- * 2) Unlock: lock screen par swipe-up karke ya to password field mein text set karta hai
- *    (letters + numbers wala password) ya number PIN pad ke digits dabata hai.
+ * 2) Unlock: lock screen par password field mein text set karta hai (ya number PIN pad dabata hai),
+ *    phir Enter dabata hai, aur CHECK karta hai ke phone sach mein unlock hua ya nahi.
  */
 class CloserService : AccessibilityService() {
 
@@ -107,14 +110,17 @@ class CloserService : AccessibilityService() {
 
     // ------------------------- Unlock (PIN ya password) -------------------------
 
+    private fun isLocked(): Boolean =
+        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+
     /**
-     * Lock screen ko swipe-up karke unlock screen kholta hai aur secret (PIN/password) dalta hai.
-     * onDone(true) = secret dal diya gaya, onDone(false) = unlock screen ya field mila hi nahi.
+     * Lock screen par secret (PIN/password) dalta hai.
+     * onDone(true) = phone sach mein unlock ho gaya, onDone(false) = unlock nahi hua (wajah RunLog mein).
      */
     fun unlockWithPin(secret: String, onDone: (Boolean) -> Unit) {
         unlockRun++
         val myRun = unlockRun
-        // Unlock screen WakeActivity kholti hai, swipe sirf backup hai (neeche attempt 4 aur 9 par)
+        // Unlock screen WakeActivity kholti hai, swipe sirf backup hai
         handler.postDelayed({ unlockStep(secret, 0, myRun, onDone) }, 1200)
     }
 
@@ -135,10 +141,18 @@ class CloserService : AccessibilityService() {
     private fun unlockStep(secret: String, attempt: Int, myRun: Int, onDone: (Boolean) -> Unit) {
         if (myRun != unlockRun) return
 
+        // Kisi aur tareeqe se (ya user ne khud) pehle hi unlock ho gaya
+        if (!isLocked()) {
+            RunLog.add(this, "UNLOCK: phone pehle se unlocked hai")
+            onDone(true)
+            return
+        }
+
         val digitsOnly = secret.isNotEmpty() && secret.all { it.isDigit() }
 
         // 1) Number PIN pad (sirf digits wale secret ke liye)
         if (digitsOnly && clickDigit(secret[0])) {
+            RunLog.add(this, "UNLOCK: PIN pad mila, digits dab raha hun")
             typeDigit(secret, 1, 0, myRun, onDone)
             return
         }
@@ -150,9 +164,10 @@ class CloserService : AccessibilityService() {
             args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, secret)
             field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
             if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+                RunLog.add(this, "UNLOCK: password field mili (${field.viewIdResourceName}), text daal diya")
                 handler.postDelayed({
                     submit(field)
-                    handler.postDelayed({ if (myRun == unlockRun) onDone(true) }, 1200)
+                    handler.postDelayed({ verifyAfterEnter(secret, myRun, onDone) }, 1500)
                 }, 400)
                 return
             }
@@ -163,7 +178,84 @@ class CloserService : AccessibilityService() {
             if (attempt == 1 || (attempt > 0 && attempt % 4 == 0)) swipeUp()
             handler.postDelayed({ unlockStep(secret, attempt + 1, myRun, onDone) }, 400)
         } else {
+            RunLog.add(this, "UNLOCK FAIL: unlock screen ya password field nahi mili")
             onDone(false)
+        }
+    }
+
+    /**
+     * Enter dabane ke baad check: phone unlock hua? Nahi hua to
+     * - field khali/gum hai: password submit ho chuka magar galat tha (dobara try nahi karte, taake
+     *   galat attempts se phone lockout na ho)
+     * - text abhi field mein hai: Enter register nahi hua, doosre tareeqe try karte hain.
+     */
+    private fun verifyAfterEnter(secret: String, myRun: Int, onDone: (Boolean) -> Unit) {
+        if (myRun != unlockRun) return
+        if (!isLocked()) {
+            RunLog.add(this, "UNLOCK kamyab (keyboard Enter se)")
+            onDone(true)
+            return
+        }
+        val f = findPasswordField()
+        val len = f?.text?.length ?: 0
+        if (f == null || len == 0) {
+            RunLog.add(this, "UNLOCK FAIL: Enter ke baad field khali/gum hai magar phone locked hai. Password galat save hua ho sakta hai")
+            onDone(false)
+            return
+        }
+
+        RunLog.add(this, "Enter register nahi hua (field mein $len characters hain), keyboard ka Enter button try kar raha hun")
+        clickEnterButtons()
+        handler.postDelayed({
+            if (myRun != unlockRun) return@postDelayed
+            if (!isLocked()) {
+                RunLog.add(this, "UNLOCK kamyab (Enter button se)")
+                onDone(true)
+                return@postDelayed
+            }
+            val f2 = findPasswordField()
+            if (f2 == null || (f2.text?.length ?: 0) == 0) {
+                RunLog.add(this, "UNLOCK FAIL: Enter button ke baad bhi phone locked (password galat ho sakta hai)")
+                onDone(false)
+                return@postDelayed
+            }
+            if (typeViaInputMethod(f2, secret)) {
+                handler.postDelayed({
+                    if (myRun != unlockRun) return@postDelayed
+                    val ok = !isLocked()
+                    RunLog.add(this, if (ok) "UNLOCK kamyab (InputMethod se)" else "UNLOCK FAIL: teeno tareeqon ke baad bhi phone locked")
+                    onDone(ok)
+                }, 1500)
+            } else {
+                onDone(false)
+            }
+        }, 1500)
+    }
+
+    /** Android 13+: accessibility ka apna input connection, bilkul keyboard ki tarah type karta hai. */
+    private fun typeViaInputMethod(field: AccessibilityNodeInfo, secret: String): Boolean {
+        if (Build.VERSION.SDK_INT < 33) {
+            RunLog.add(this, "InputMethod tareeqa Android 13+ par hi chalta hai")
+            return false
+        }
+        return try {
+            val clear = Bundle()
+            clear.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "")
+            field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, clear)
+            field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            val ic = inputMethod?.currentInputConnection
+            if (ic == null) {
+                RunLog.add(this, "InputMethod connection nahi mila")
+                false
+            } else {
+                ic.commitText(secret, 1, null)
+                ic.performEditorAction(EditorInfo.IME_ACTION_DONE)
+                RunLog.add(this, "InputMethod se password type kiya")
+                true
+            }
+        } catch (e: Exception) {
+            RunLog.add(this, "InputMethod error: ${e.message}")
+            false
         }
     }
 
@@ -172,7 +264,12 @@ class CloserService : AccessibilityService() {
         if (idx >= pin.length) {
             handler.postDelayed({
                 submit(null)
-                handler.postDelayed({ if (myRun == unlockRun) onDone(true) }, 1200)
+                handler.postDelayed({
+                    if (myRun != unlockRun) return@postDelayed
+                    val ok = !isLocked()
+                    RunLog.add(this, if (ok) "UNLOCK kamyab (PIN pad se)" else "UNLOCK FAIL: PIN pad ke baad bhi phone locked")
+                    onDone(ok)
+                }, 1500)
             }, 300)
             return
         }
@@ -181,6 +278,7 @@ class CloserService : AccessibilityService() {
         } else if (attempt < 8) {
             handler.postDelayed({ typeDigit(pin, idx, attempt + 1, myRun, onDone) }, 400)
         } else {
+            RunLog.add(this, "UNLOCK FAIL: PIN pad beech mein gum ho gaya")
             onDone(false) // PIN pad beech mein gum ho gaya
         }
     }
@@ -220,17 +318,24 @@ class CloserService : AccessibilityService() {
         return null
     }
 
-    /** Enter dabana: pehle keyboard ka Enter action, phir "Enter" button. */
+    /** Enter dabana: keyboard ka Enter action (Android 11+), warna "Enter" button. */
     private fun submit(field: AccessibilityNodeInfo?) {
         if (field != null && Build.VERSION.SDK_INT >= 30) {
             if (field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) return
         }
+        clickEnterButtons()
+    }
+
+    /** Keyboard ya lock screen ke Enter/Done/Go button ko dhoondh kar dabana. */
+    private fun clickEnterButtons() {
         for (root in allRoots()) {
             for (n in root.findAccessibilityNodeInfosByViewId("com.android.systemui:id/key_enter")) {
                 if (clickNode(n)) return
             }
-            for (n in root.findAccessibilityNodeInfosByText("Enter")) {
-                if (clickNode(n)) return
+            for (label in listOf("Enter", "Done", "Go", "Next")) {
+                for (n in root.findAccessibilityNodeInfosByText(label)) {
+                    if (clickNode(n)) return
+                }
             }
         }
     }

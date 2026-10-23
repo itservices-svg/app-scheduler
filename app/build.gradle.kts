@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.appscheduler"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.3"
+        versionCode = 4
+        versionName = "0.4"
     }
 
     // Har build par wohi key use hoti hai, taake nayi APK purani ke upar install ho

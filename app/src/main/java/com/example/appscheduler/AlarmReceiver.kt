@@ -118,12 +118,12 @@ class AlarmReceiver : BroadcastReceiver() {
             svc.unlockWithPin(pin) { ok ->
                 RunLog.add(
                     ctx,
-                    if (ok) "UNLOCK password dala gaya"
-                    else "UNLOCK FAIL: password field ya PIN pad nahi mila"
+                    if (ok) "UNLOCK ho gaya, ab app khol raha hun"
+                    else "UNLOCK nahi hua (wajah upar log mein), phone abhi locked hai"
                 )
                 if (!ok) {
                     Toast.makeText(
-                        ctx, "Unlock screen ya password field nahi mili, khud unlock karo", Toast.LENGTH_LONG
+                        ctx, "Phone unlock nahi hua, khud unlock karo. Wajah ke liye Log dekho", Toast.LENGTH_LONG
                     ).show()
                 }
                 startTarget(ctx, pkg)
