@@ -169,7 +169,8 @@ class MainActivity : Activity() {
         val pinSet = PinVault.has(this)
         status.text = "Exact alarm: ${mark(exact)}   Overlay: ${mark(overlay)}   Accessibility: ${mark(a11y)}\n" +
             "Battery: ${mark((getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(packageName))}" +
-            "   Unlock PIN/Password: ${if (pinSet) "saved" else "nahi"}"
+            "   Unlock PIN/Password: ${if (pinSet) "saved" else "nahi"}\n" +
+            "App version: ${appVersion()}"
 
         list.removeAllViews()
         val items = Store.all(this)
@@ -238,6 +239,14 @@ class MainActivity : Activity() {
         })
         box.addView(actions)
         return box
+    }
+
+    private fun appVersion(): String {
+        return try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        } catch (e: Exception) {
+            "?"
+        }
     }
 
     private fun showSettings() {
